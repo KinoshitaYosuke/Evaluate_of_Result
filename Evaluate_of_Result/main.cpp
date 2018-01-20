@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define YUDO 0.9
+#define YUDO 0.5
 #define IOU_OUTPUT 0.9
 
 class Place {
@@ -78,16 +78,26 @@ cv::Mat draw_rectangle(cv::Mat ans_im, int x, int y, int width, int height, int 
 	return ans_im;
 }
 
-void Result_MR_and_FPPI(float yudo,float iou_output) {
+void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 	//変数宣言
 	float miss_rate = 0;
 	float fppi = 0;
 	int num = 0;
+	float TP = 0;
+	float FP = 0;
+	int FN = 0;
+	int parts = 0;
+
+	FILE* Save;
+	if (fopen_s(&Save, Save_file, "a") != 0) {
+		cout << "error" << endl;
+		return;
+	}
 
 	//テキストファイルのリスト読み込み
 	char List_n[1024];
 	FILE *List;
-	if (fopen_s(&List, "c:/photo/text_list.txt", "r") != 0) {
+	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
 		cout << "not found List file" << endl;
 		return;
 	}
@@ -98,6 +108,8 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 			List_name[i] = List_n[i];
 			List_name[i + 1] = '\0';
 		}
+
+
 		char GT_name[1024] = "c:/photo/GT_text/";
 		strcat_s(GT_name, List_name);
 		//GTファイル読み込み
@@ -123,8 +135,14 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 		}
 		fclose(GT);
 
-		char Result_name[1024] = "C:/photo/result_data_from_demo/2017_12_29_EP/result_data/";
-		strcat_s(Result_name, List_name);
+
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_file[i];
+			if (Result_file[i] == '\0')break;
+		}
+
+		strcat(Result_name, List_name);
 		//Resultファイル読み込み
 		char Result_n[5][1024];
 		FILE *Result;
@@ -133,7 +151,7 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 			return;
 		}
 
-		Place place_Result[10];
+		Place place_Result[100];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -146,6 +164,17 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 			place_Result[num_R].y = atoi(Result_n[2]);
 			place_Result[num_R].width = atoi(Result_n[3]);
 			place_Result[num_R].height = atoi(Result_n[4]);
+
+			//尤度チェック
+			if (place_Result[num_R].yudo < yudo) {
+				place_Result[num_R].yudo = 0;
+				place_Result[num_R].x = -1;
+				place_Result[num_R].y = -1;
+				place_Result[num_R].width = -1;
+				place_Result[num_R].height = -1;
+				continue;
+			}
+
 			num_R++;
 		}
 		fclose(Result);
@@ -173,7 +202,184 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 		}
 
 		//Result
-		cv::Mat Result_B[10] = {
+		cv::Mat Result_B[100];
+
+		for (int i = 0; i < 100; i++) {
+			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
+		}
+
+		for (int i = 0; i < num_R; i++) {
+			if (place_Result[i].yudo < yudo) continue;
+			for (int n = place_Result[i].y; n < place_Result[i].y + place_Result[i].height; n++) {
+				for (int m = place_Result[i].x; m < place_Result[i].x + place_Result[i].width; m++) {
+					Result_B[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+				}
+			}
+		}
+
+		float Pre_num[10][100];
+		for (int i = 0; i < 10; i++) {
+			for (int j = 0; j < 100; j++) {
+				Pre_num[i][j] = 0;
+			}
+		}
+
+		//Precision(=(GT&RE)/GT)の計算
+		for (int i = 0; i < num_G; i++) {
+			for (int j = 0; j < num_R; j++) {
+				//Precision計算
+				float Overlap = 0.0, Union = 0.0;
+				for (int n = 0; n < Result_B[j].rows; n++) {
+					for (int m = 0; m < Result_B[j].cols; m++) {
+						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+							Union += 1.0;
+							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+								Overlap += 1.0;
+							}
+						}
+					}
+				}
+				Pre_num[i][j] = Overlap / Union;
+			}
+		}
+		float TP_tmp = TP;
+		for (int i = 0; i < num_R; i++) {
+			if (Pre_num[0][i] >= 0.7 || Pre_num[1][i] >= 0.7) {TP+=1.0;}
+			else {FP+=1.0;}
+
+			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
+				parts++;
+			}
+		}
+		if ((TP - TP_tmp) < num_G) {
+			FN += num_G - (TP - TP_tmp);
+		}
+
+	}
+
+	fprintf_s(Save, "%f, %.0f, %.0f, %d, %d\n", yudo, TP, FP, FN, parts);
+	fclose(Save);
+	fclose(List);
+}
+
+void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
+	//変数宣言
+	float miss_rate = 0;
+	float fppi = 0;
+	int num = 0;
+	float TP = 0;
+	float FP = 0;
+	int FN = 0;
+	int parts = 0;
+
+	FILE* Save;
+	if (fopen_s(&Save, Save_file, "a") != 0) {
+		cout << "error" << endl;
+		return;
+	}
+
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+
+
+		char GT_name[1024] = "c:/photo/GT_text/";
+		strcat_s(GT_name, List_name);
+		//GTファイル読み込み
+		char GT_n[4][1024];
+		FILE *GT;
+		if (fopen_s(&GT, GT_name, "r") != 0) {
+			cout << "not found GT file" << endl;
+			return;
+		}
+
+		Place place_GT[10];
+		int num_G = 0;
+		while (fgets(GT_n[0], 256, GT) != NULL) {	//すべて読み込み，変数に格納
+			fgets(GT_n[1], 256, GT);
+			fgets(GT_n[2], 256, GT);
+			fgets(GT_n[3], 256, GT);
+
+			place_GT[num_G].x = atoi(GT_n[0]);
+			place_GT[num_G].y = atoi(GT_n[1]);
+			place_GT[num_G].width = atoi(GT_n[2]);
+			place_GT[num_G].height = atoi(GT_n[3]);
+			num_G++;
+		}
+		fclose(GT);
+
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_file[i];
+			if (Result_file[i] == '\0')break;
+		}
+
+		strcat(Result_name, List_name);
+		//Resultファイル読み込み
+		char Result_n[10][1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return;
+		}
+
+		Place place_Result[100];
+		int num_R = 0;
+		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+			fgets(Result_n[5], 256, Result);
+			fgets(Result_n[6], 256, Result);
+			fgets(Result_n[7], 256, Result);
+			fgets(Result_n[8], 256, Result);
+			fgets(Result_n[9], 256, Result);
+
+			if (flag == 1) {
+				place_Result[num_R].yudo = atof(Result_n[0]);
+				place_Result[num_R].x = atoi(Result_n[1]);
+				place_Result[num_R].y = atoi(Result_n[2]);
+				place_Result[num_R].width = atoi(Result_n[3]);
+				place_Result[num_R].height = atoi(Result_n[4]);
+			}
+			else {
+				place_Result[num_R].yudo = atof(Result_n[0]);
+				place_Result[num_R].x = atoi(Result_n[6]);
+				place_Result[num_R].y = atoi(Result_n[7]);
+				place_Result[num_R].width = atoi(Result_n[8]);
+				place_Result[num_R].height = atoi(Result_n[9]);
+			}
+			
+
+			//尤度チェック
+			if (place_Result[num_R].yudo < yudo) {
+				place_Result[num_R].yudo = 0;
+				place_Result[num_R].x = -1;
+				place_Result[num_R].y = -1;
+				place_Result[num_R].width = -1;
+				place_Result[num_R].height = -1;
+				continue;
+			}
+
+			num_R++;
+		}
+		fclose(Result);
+
+		//2値画像作成
+		//GT
+		cv::Mat GT_B[10] = {
 			cv::Mat::zeros(480, 640, CV_8UC3),
 			cv::Mat::zeros(480, 640, CV_8UC3),
 			cv::Mat::zeros(480, 640, CV_8UC3),
@@ -185,6 +391,20 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 			cv::Mat::zeros(480, 640, CV_8UC3),
 			cv::Mat::zeros(480, 640, CV_8UC3),
 		};
+		for (int i = 0; i < num_G; i++) {
+			for (int n = place_GT[i].y; n < place_GT[i].y + place_GT[i].height; n++) {
+				for (int m = place_GT[i].x; m < place_GT[i].x + place_GT[i].width; m++) {
+					GT_B[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+				}
+			}
+		}
+
+		//Result
+		cv::Mat Result_B[100];
+
+		for (int i = 0; i < 100; i++) {
+			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
+		}
 
 		for (int i = 0; i < num_R; i++) {
 			if (place_Result[i].yudo < yudo) continue;
@@ -194,76 +414,276 @@ void Result_MR_and_FPPI(float yudo,float iou_output) {
 				}
 			}
 		}
-		int point[10] = { 0,0,0,0,0,0,0,0,0,0 };
-		//GTとResultの中心画素距離算出
-		for (int n = 0; n < num_G; n++) {
-			for (int m = 0; m < num_R; m++) {
-				if (abs((place_GT[n].x + place_GT[n].width / 2) - (place_Result[m].x + place_Result[m].width / 2)) <= 50
-					&&
-					abs((place_GT[n].y + place_GT[n].height / 2) - (place_Result[m].y + place_Result[m].height / 2)) <= 50) {
 
-					point[n] = 1;
-				}
+		float Pre_num[10][100];
+		for (int i = 0; i < 10; i++) {
+			for (int j = 0; j < 100; j++) {
+				Pre_num[i][j] = 0;
 			}
 		}
 
-		float ok = 0.0;
-		//(GT&Result)/GT 算出
-//		for (int i = 0; i < num_G; i++) {
-//			float IoU = evaluation(Result_B[i],GT_B[i]);
-//			if (IoU >= iou_output && point[i]==1) {
-//				ok+=1.0;
-//			}
-//		}
+		//Precision(=(GT&RE)/GT)の計算
 		for (int i = 0; i < num_G; i++) {
-			if (point[i] == 1) {
-				for (int j = 0; j < num_R; j++) {
-					float Union = 0, Overlap = 0;
-					
-					for (int n = 0; n < 480; n++) {
-						for (int m = 0; m < 640; m++) {
-							if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
-								Union += 1.0;
-								if (Result_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
-									Overlap += 1.0;
-								}
+			for (int j = 0; j < num_R; j++) {
+				//Precision計算
+				float Overlap = 0.0, Union = 0.0;
+				for (int n = 0; n < Result_B[j].rows; n++) {
+					for (int m = 0; m < Result_B[j].cols; m++) {
+						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+							Union += 1.0;
+							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+								Overlap += 1.0;
 							}
 						}
 					}
-					
-					if((Overlap/Union)>= iou_output) {
-						ok += 1.0;
-						break;
-					}
+				}
+				Pre_num[i][j] = Overlap / Union;
+			}
+		}
+		float TP_tmp = TP;
+		for (int i = 0; i < num_R; i++) {
+			if (Pre_num[0][i] >= 0.7 || Pre_num[1][i] >= 0.7) { TP += 1.0; }
+			else { FP += 1.0; }
+
+			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
+				parts++;
+			}
+		}
+		if ((TP - TP_tmp) < num_G) {
+			FN += num_G - (TP - TP_tmp);
+		}
+
+	}
+
+	fprintf_s(Save, "%f, %.0f, %.0f, %d, %d\n", yudo, TP, FP, FN, parts);
+	fclose(Save);
+	fclose(List);
+}
+
+void IoU_Result() {
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+		char GT_name[1024] = "c:/photo/GT_text/";
+		strcat_s(GT_name, List_name);
+		//GTファイル読み込み
+		char GT_n[4][1024];
+		FILE *GT;
+		if (fopen_s(&GT, GT_name, "r") != 0) {
+			cout << "not found GT file" << endl;
+			return;
+		}
+		Place place_GT[10];
+		int num_G = 0;
+		while (fgets(GT_n[0], 256, GT) != NULL) {	//すべて読み込み，変数に格納
+			fgets(GT_n[1], 256, GT);
+			fgets(GT_n[2], 256, GT);
+			fgets(GT_n[3], 256, GT);
+
+			place_GT[num_G].x = atoi(GT_n[0]);
+			place_GT[num_G].y = atoi(GT_n[1]);
+			place_GT[num_G].width = atoi(GT_n[2]);
+			place_GT[num_G].height = atoi(GT_n[3]);
+			num_G++;
+		}
+		fclose(GT);
+
+		char Result_name[1024] = "C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.7_40/";
+		strcat_s(Result_name, List_name);
+		//Resultファイル読み込み
+		char Result_n[5][1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return;
+		}
+		Place place_Result[100];
+		int num_R = 0;
+		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+
+			fgets(Result_n[0], 256, Result);
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+
+
+			place_Result[num_R].yudo = atof(Result_n[0]);
+			place_Result[num_R].x = atoi(Result_n[1]);
+			place_Result[num_R].y = atoi(Result_n[2]);
+			place_Result[num_R].width = atoi(Result_n[3]);
+			place_Result[num_R].height = atoi(Result_n[4]);
+			num_R++;
+		}
+		fclose(Result);
+
+		//バイナリ画像生成
+		cv::Mat GT_Binary[10];
+
+		for (int i = 0; i < num_G; i++) {
+			GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+		}
+		cv::Mat Result_Binary[100];
+		for (int i = 0; i < num_R; i++) {
+			Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+		}
+
+		for (int i = 0; i < num_G; i++) {
+			for (int n = place_GT[i].y; n < place_GT[i].y + place_GT[i].height; n++) {
+				for (int m = place_GT[i].x; m < place_GT[i].x + place_GT[i].width; m++) {
+					GT_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
 				}
 			}
 		}
 
-		//Miss Rate算出(OKの数/GTの数)
-		miss_rate += 1.0 - (ok / (float)num_G);
+		for (int i = 0; i < num_R; i++) {
+			for (int n = place_Result[i].y; n < place_Result[i].y + place_Result[i].height; n++) {
+				for (int m = place_Result[i].x; m < place_Result[i].x + place_Result[i].width; m++) {
+					Result_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+				}
+			}
+		}
+		float IoU_num[100];
+		for (int i = 0; i < 100; i++) {
+			IoU_num[i] = -1;
+		}
 
-		//FPPI算出(Resultの数-OKの数)
-		fppi += (float)num_R - ok;
-//		cout << "miss rate:" << miss_rate << ",fppi:" << fppi << endl;
-		num++;
+		for (int i = 0; i < num_G; i++) {
+			for (int j = 0; j < num_R; j++) {
+				float tmp = evaluation(Result_Binary[j], GT_Binary[i]);
+				if (IoU_num[j] < tmp) {
+					IoU_num[j] = tmp;
+				}
+			}
+		}
 
-//		cout << List_name << endl;
-//		cout << "miss rate:" << miss_rate << endl;
-//		cout << "fppi" << fppi << endl;
+		cout << List_name << ",";
+		for (int i = 0; i < num_R; i++) {
+			cout << IoU_num[i] << ",";
+		}
+		cout << endl;
 	}
-	cout << yudo << "," << miss_rate / (float)num << "," << fppi / (float)num << endl;
-//	cout << "fppi" << fppi / (float)num << endl;
 
 	fclose(List);
 }
 
 int main(int argc, char** argv) {
-	float i = 1.0;
-	while (i >= 0.5) {
-		Result_MR_and_FPPI(i, 0.7);
-		i -= 0.01;
-	}
+	char Result_file_AP[10][1024] = {
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/", 
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/", 
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/", 
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/",
+		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/", 
+	};
+	char Result_file_OOP[10][1024] = {
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_10/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_20/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_30/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_40/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_50/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_60/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_70/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_80/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_90/",
+		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_100/",
+	};
+	char Result_file_EP[10][1024] = {
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_10/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_20/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_30/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_40/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_50/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_60/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_70/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_80/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_90/",
+		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_100/",
+	};
 
+	char Save_file_AP_OOP[10][1024] = {
+		"AP_OOP_Save_10_2.txt",
+		"AP_OOP_Save_20_2.txt",
+		"AP_OOP_Save_30_2.txt",
+		"AP_OOP_Save_40_2.txt",
+		"AP_OOP_Save_50_2.txt",
+		"AP_OOP_Save_60_2.txt",
+		"AP_OOP_Save_70_2.txt",
+		"AP_OOP_Save_80_2.txt",
+		"AP_OOP_Save_90_2.txt",
+		"AP_OOP_Save_100_2.txt",
+	};
+	char Save_file_AP_AP[10][1024] = {
+		"AP_AP_Save_10.txt",
+		"AP_AP_Save_20.txt",
+		"AP_AP_Save_30.txt",
+		"AP_AP_Save_40.txt",
+		"AP_AP_Save_50.txt",
+		"AP_AP_Save_60.txt",
+		"AP_AP_Save_70.txt",
+		"AP_AP_Save_80.txt",
+		"AP_AP_Save_90.txt",
+		"AP_AP_Save_100.txt", 
+	};
+	char Save_file_OOP[10][1024] = {
+		"OOP_Save_10.txt",
+		"OOP_Save_20.txt",
+		"OOP_Save_30.txt",
+		"OOP_Save_40.txt",
+		"OOP_Save_50.txt",
+		"OOP_Save_60.txt",
+		"OOP_Save_70.txt",
+		"OOP_Save_80.txt",
+		"OOP_Save_90.txt",
+		"OOP_Save_100.txt", 
+	};
+	char Save_file_EP[10][1024] = {
+		"EP_Save_10.txt",
+		"EP_Save_20.txt",
+		"EP_Save_30.txt",
+		"EP_Save_40.txt",
+		"EP_Save_50.txt",
+		"EP_Save_60.txt",
+		"EP_Save_70.txt",
+		"EP_Save_80.txt",
+		"EP_Save_90.txt",
+		"EP_Save_100.txt",
+	};
+
+	for (int num = 0; num < 10; num++) {
+		double i = 0.5;
+		while (i <= 1.0) {
+			cout << i << ",";
+		//	Result_ROC(i, Result_file_OOP[num], Save_file_OOP[num]);
+		//	Result_ROC(i, Result_file_EP[num], Save_file_EP[num]);
+			Result_ROC_2(i, Result_file_AP[num], Save_file_AP_OOP[num], 1);
+		//	Result_ROC_2(i, Result_file_AP[num], Save_file_AP_AP[num], 0);
+
+			if (i < 0.8) i += 0.1;
+			else if (i < 0.99)i += 0.01;
+			else i += 0.0001;
+		}
+		cout << endl;
+	}
 
 	return 0;
 }

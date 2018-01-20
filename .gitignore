@@ -259,3 +259,6 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/Evaluate_of_Result/AP_ROC
+/Evaluate_of_Result/EP_ROC
+/Evaluate_of_Result/OOP_ROC
