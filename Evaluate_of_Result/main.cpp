@@ -662,12 +662,12 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 			if (Label[i] == -1) TN += 1.0;
 			else FN += 1.0;
 		}
-		else if(Label[i] == 1) {
+		else if(Result_label[i] == 1) {
 			if (Label[i] == 1) TP += 1.0;
 			else FP += 1.0;
 		}
 		else {
-			cout << "error" << endl;
+			cout << "yudo error" << endl;
 			return;
 		}
 	}
@@ -681,24 +681,25 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 }
 
 int main(int argc, char** argv) {
-	char Result_file_OOP[1024];
-	char Result_file_EP[1024];
-	char Result_file_AP[1024];
+	char Result_file_OOP[1024]="c:/photo/result_data_from_demo/2018_01_21_AP/result_data/";
+	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_21_EP/result_data/";
+	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/result_data/";
 
-	char Save_file_OOP[1024];
-	char Save_file_EP[1024];
-	char Save_file_AP[1024];
+	char Save_file_OOP[1024]="ROC_data_OOP.txt";
+	char Save_file_EP[1024]="ROC_data_EP.txt";
+	char Save_file_AP[1024]="ROC_data_AP.txt";
 
-	double i = 0.5;
+	double i = 0.0;
 	while (i <= 1.0) {
 		cout << i << ",";
 		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
 		ROC_data(i, Result_file_EP, Save_file_EP,0);
 		ROC_data(i, Result_file_AP, Save_file_AP, 1);
 
-		if (i < 0.8) i += 0.1;
-		else if (i < 0.99)i += 0.01;
-		else i += 0.0001;
+//		if (i < 0.8) i += 0.1;
+//		else if (i < 0.99)i += 0.01;
+//		else i += 0.0001;
+		i += 0.0001;
 	}
 	cout << endl;
 	
