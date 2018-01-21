@@ -85,8 +85,8 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 	int num = 0;
 	float TP = 0;
 	float FP = 0;
-	int FN = 0;
-	int parts = 0;
+	float FN = 0;
+	float parts = 0;
 
 	FILE* Save;
 	if (fopen_s(&Save, Save_file, "a") != 0) {
@@ -151,7 +151,7 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 			return;
 		}
 
-		Place place_Result[100];
+		Place place_Result[10];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -202,9 +202,9 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 		}
 
 		//Result
-		cv::Mat Result_B[100];
+		cv::Mat Result_B[10];
 
-		for (int i = 0; i < 100; i++) {
+		for (int i = 0; i < 10; i++) {
 			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
 		}
 
@@ -217,9 +217,9 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 			}
 		}
 
-		float Pre_num[10][100];
+		float Pre_num[10][10];
 		for (int i = 0; i < 10; i++) {
-			for (int j = 0; j < 100; j++) {
+			for (int j = 0; j < 10; j++) {
 				Pre_num[i][j] = 0;
 			}
 		}
@@ -248,7 +248,7 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 			else {FP+=1.0;}
 
 			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
-				parts++;
+				parts+1.0;
 			}
 		}
 		if ((TP - TP_tmp) < num_G) {
@@ -257,7 +257,10 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 
 	}
 
-	fprintf_s(Save, "%f, %.0f, %.0f, %d, %d\n", yudo, TP, FP, FN, parts);
+	float Precision = TP / (TP + FP);
+	float Recall = TP / (TP + FN);
+	float FPPI = FP / 203.0;
+	fprintf_s(Save, "%f, %.0f, %.0f, %.0f, %.0f, %f, %f, %f\n", yudo, TP, FP, FN, parts, Precision, Recall, FPPI);
 	fclose(Save);
 	fclose(List);
 }
@@ -269,8 +272,8 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 	int num = 0;
 	float TP = 0;
 	float FP = 0;
-	int FN = 0;
-	int parts = 0;
+	float FN = 0;
+	float parts = 0;
 
 	FILE* Save;
 	if (fopen_s(&Save, Save_file, "a") != 0) {
@@ -334,7 +337,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			return;
 		}
 
-		Place place_Result[100];
+		Place place_Result[200];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -400,9 +403,9 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 		}
 
 		//Result
-		cv::Mat Result_B[100];
+		cv::Mat Result_B[200];
 
-		for (int i = 0; i < 100; i++) {
+		for (int i = 0; i < 200; i++) {
 			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
 		}
 
@@ -415,9 +418,9 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			}
 		}
 
-		float Pre_num[10][100];
+		float Pre_num[10][200];
 		for (int i = 0; i < 10; i++) {
-			for (int j = 0; j < 100; j++) {
+			for (int j = 0; j < 200; j++) {
 				Pre_num[i][j] = 0;
 			}
 		}
@@ -446,7 +449,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			else { FP += 1.0; }
 
 			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
-				parts++;
+				parts+=1.0;
 			}
 		}
 		if ((TP - TP_tmp) < num_G) {
@@ -454,8 +457,10 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 		}
 
 	}
-
-	fprintf_s(Save, "%f, %.0f, %.0f, %d, %d\n", yudo, TP, FP, FN, parts);
+	float Precision = TP / (TP + FP);
+	float Recall = TP / (TP + FN);
+	float FPPI = FP / 203.0;
+	fprintf_s(Save, "%f, %.0f, %.0f, %.0f, %.0f, %f, %f, %f\n", yudo, TP, FP, FN, parts, Precision, Recall, FPPI);
 	fclose(Save);
 	fclose(List);
 }
@@ -582,108 +587,120 @@ void IoU_Result() {
 	fclose(List);
 }
 
-int main(int argc, char** argv) {
-	char Result_file_AP[10][1024] = {
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/", 
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/", 
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/", 
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/",
-		"C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/", 
-	};
-	char Result_file_OOP[10][1024] = {
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_10/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_20/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_30/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_40/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_50/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_60/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_70/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_80/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_90/",
-		"C:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_100/",
-	};
-	char Result_file_EP[10][1024] = {
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_10/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_20/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_30/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_40/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_50/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_60/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_70/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_80/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_90/",
-		"C:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_100/",
-	};
+void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
+	//変数宣言
+	int num = 0;
+	float TP = 0;
+	float FP = 0;
+	float FN = 0;
+	float TN = 0;
 
-	char Save_file_AP_OOP[10][1024] = {
-		"AP_OOP_Save_10_2.txt",
-		"AP_OOP_Save_20_2.txt",
-		"AP_OOP_Save_30_2.txt",
-		"AP_OOP_Save_40_2.txt",
-		"AP_OOP_Save_50_2.txt",
-		"AP_OOP_Save_60_2.txt",
-		"AP_OOP_Save_70_2.txt",
-		"AP_OOP_Save_80_2.txt",
-		"AP_OOP_Save_90_2.txt",
-		"AP_OOP_Save_100_2.txt",
-	};
-	char Save_file_AP_AP[10][1024] = {
-		"AP_AP_Save_10.txt",
-		"AP_AP_Save_20.txt",
-		"AP_AP_Save_30.txt",
-		"AP_AP_Save_40.txt",
-		"AP_AP_Save_50.txt",
-		"AP_AP_Save_60.txt",
-		"AP_AP_Save_70.txt",
-		"AP_AP_Save_80.txt",
-		"AP_AP_Save_90.txt",
-		"AP_AP_Save_100.txt", 
-	};
-	char Save_file_OOP[10][1024] = {
-		"OOP_Save_10.txt",
-		"OOP_Save_20.txt",
-		"OOP_Save_30.txt",
-		"OOP_Save_40.txt",
-		"OOP_Save_50.txt",
-		"OOP_Save_60.txt",
-		"OOP_Save_70.txt",
-		"OOP_Save_80.txt",
-		"OOP_Save_90.txt",
-		"OOP_Save_100.txt", 
-	};
-	char Save_file_EP[10][1024] = {
-		"EP_Save_10.txt",
-		"EP_Save_20.txt",
-		"EP_Save_30.txt",
-		"EP_Save_40.txt",
-		"EP_Save_50.txt",
-		"EP_Save_60.txt",
-		"EP_Save_70.txt",
-		"EP_Save_80.txt",
-		"EP_Save_90.txt",
-		"EP_Save_100.txt",
-	};
+	int Label[490],Result_label[490];
+	for (int i = 0; i < 490; i++) {
+		if (i < 277)Label[i] = -1;
+		else Label[i] = 1;
 
-	for (int num = 0; num < 10; num++) {
-		double i = 0.5;
-		while (i <= 1.0) {
-			cout << i << ",";
-		//	Result_ROC(i, Result_file_OOP[num], Save_file_OOP[num]);
-		//	Result_ROC(i, Result_file_EP[num], Save_file_EP[num]);
-			Result_ROC_2(i, Result_file_AP[num], Save_file_AP_OOP[num], 1);
-		//	Result_ROC_2(i, Result_file_AP[num], Save_file_AP_AP[num], 0);
-
-			if (i < 0.8) i += 0.1;
-			else if (i < 0.99)i += 0.01;
-			else i += 0.0001;
-		}
-		cout << endl;
+		Result_label[i] = 0;
 	}
 
+	FILE* Save;
+	if (fopen_s(&Save, Save_file, "a") != 0) {
+		cout << "error" << endl;
+		return;
+	}
+
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/photo/predict-text.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_file[i];
+			if (Result_file[i] == '\0')break;
+		}
+
+		strcat(Result_name, List_name);
+		//Resultファイル読み込み
+		char Result_n[1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return;
+		}
+
+		Place place_Result;
+		fgets(Result_n, 256, Result);
+
+		if (flag == 1)fgets(Result_n, 256, Result);
+
+		place_Result.yudo = atof(Result_n);
+		
+		//尤度チェック
+		if (place_Result.yudo < yudo) {
+			Result_label[num] = -1;
+		}
+		else Result_label[num] = 1;
+
+		num++;
+
+		fclose(Result);
+	}
+
+	for (int i = 0; i < 490; i++) {
+		if (Result_label[i] == -1) {
+			if (Label[i] == -1) TN += 1.0;
+			else FN += 1.0;
+		}
+		else if(Label[i] == 1) {
+			if (Label[i] == 1) TP += 1.0;
+			else FP += 1.0;
+		}
+		else {
+			cout << "error" << endl;
+			return;
+		}
+	}
+
+	float TPR = TP / (TP + FN);
+	float FPR = FP / (FP + TN);
+
+	fprintf_s(Save, "%f, %f\n", TPR, FPR);
+	fclose(Save);
+	fclose(List);
+}
+
+int main(int argc, char** argv) {
+	char Result_file_OOP[1024];
+	char Result_file_EP[1024];
+	char Result_file_AP[1024];
+
+	char Save_file_OOP[1024];
+	char Save_file_EP[1024];
+	char Save_file_AP[1024];
+
+	double i = 0.5;
+	while (i <= 1.0) {
+		cout << i << ",";
+		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
+		ROC_data(i, Result_file_EP, Save_file_EP,0);
+		ROC_data(i, Result_file_AP, Save_file_AP, 1);
+
+		if (i < 0.8) i += 0.1;
+		else if (i < 0.99)i += 0.01;
+		else i += 0.0001;
+	}
+	cout << endl;
+	
 	return 0;
 }
