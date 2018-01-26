@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define YUDO 0.5
+#define YUDO 0.916
 #define IOU_OUTPUT 0.9
 
 class Place {
@@ -78,7 +78,7 @@ cv::Mat draw_rectangle(cv::Mat ans_im, int x, int y, int width, int height, int 
 	return ans_im;
 }
 
-void Result_ROC(float yudo,char* Result_file,char* Save_file) {
+void Result_ROC(float yudo, float iou, char* Result_file,char* Save_file) {
 	//変数宣言
 	float miss_rate = 0;
 	float fppi = 0;
@@ -151,7 +151,7 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 			return;
 		}
 
-		Place place_Result[10];
+		Place place_Result[150];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -202,9 +202,9 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 		}
 
 		//Result
-		cv::Mat Result_B[10];
+		cv::Mat Result_B[150];
 
-		for (int i = 0; i < 10; i++) {
+		for (int i = 0; i < 150; i++) {
 			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
 		}
 
@@ -217,9 +217,9 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 			}
 		}
 
-		float Pre_num[10][10];
+		float Pre_num[10][150];
 		for (int i = 0; i < 10; i++) {
-			for (int j = 0; j < 10; j++) {
+			for (int j = 0; j < 150; j++) {
 				Pre_num[i][j] = 0;
 			}
 		}
@@ -231,9 +231,9 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 				float Overlap = 0.0, Union = 0.0;
 				for (int n = 0; n < Result_B[j].rows; n++) {
 					for (int m = 0; m < Result_B[j].cols; m++) {
-						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255) || Result_B[j].at<cv::Vec3b>(n,m)==cv::Vec3b(255,255,255)) {
 							Union += 1.0;
-							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255) && GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
 								Overlap += 1.0;
 							}
 						}
@@ -244,7 +244,7 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 		}
 		float TP_tmp = TP;
 		for (int i = 0; i < num_R; i++) {
-			if (Pre_num[0][i] >= 0.7 || Pre_num[1][i] >= 0.7) {TP+=1.0;}
+			if (Pre_num[0][i] >= iou || Pre_num[1][i] >= iou) {TP+=1.0;}
 			else {FP+=1.0;}
 
 			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
@@ -260,12 +260,12 @@ void Result_ROC(float yudo,char* Result_file,char* Save_file) {
 	float Precision = TP / (TP + FP);
 	float Recall = TP / (TP + FN);
 	float FPPI = FP / 203.0;
-	fprintf_s(Save, "%f, %.0f, %.0f, %.0f, %.0f, %f, %f, %f\n", yudo, TP, FP, FN, parts, Precision, Recall, FPPI);
+	fprintf_s(Save, "%.0f, %.0f, %.0f, %f, %f, %f\n", TP, FP, FN, Precision, Recall, FPPI);
 	fclose(Save);
 	fclose(List);
 }
 
-void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
+void Result_ROC_2(float yudo, float iou, char* Result_file, char* Save_file, int flag) {
 	//変数宣言
 	float miss_rate = 0;
 	float fppi = 0;
@@ -337,7 +337,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			return;
 		}
 
-		Place place_Result[200];
+		Place place_Result[100];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -350,6 +350,12 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			fgets(Result_n[8], 256, Result);
 			fgets(Result_n[9], 256, Result);
 
+			place_Result[num_R].yudo = atof(Result_n[0]);
+			if (place_Result[num_R].yudo < 0.711) {
+				place_Result[num_R].yudo = 0;
+				continue;
+			}
+
 			if (flag == 1) {
 				place_Result[num_R].yudo = atof(Result_n[0]);
 				place_Result[num_R].x = atoi(Result_n[1]);
@@ -358,7 +364,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 				place_Result[num_R].height = atoi(Result_n[4]);
 			}
 			else {
-				place_Result[num_R].yudo = atof(Result_n[0]);
+				place_Result[num_R].yudo = atof(Result_n[5]);
 				place_Result[num_R].x = atoi(Result_n[6]);
 				place_Result[num_R].y = atoi(Result_n[7]);
 				place_Result[num_R].width = atoi(Result_n[8]);
@@ -403,9 +409,9 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 		}
 
 		//Result
-		cv::Mat Result_B[200];
+		cv::Mat Result_B[100];
 
-		for (int i = 0; i < 200; i++) {
+		for (int i = 0; i < 100; i++) {
 			Result_B[i] = cv::Mat::zeros(480, 640, CV_8UC3);
 		}
 
@@ -418,9 +424,9 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			}
 		}
 
-		float Pre_num[10][200];
+		float Pre_num[10][100];
 		for (int i = 0; i < 10; i++) {
-			for (int j = 0; j < 200; j++) {
+			for (int j = 0; j < 100; j++) {
 				Pre_num[i][j] = 0;
 			}
 		}
@@ -432,9 +438,9 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 				float Overlap = 0.0, Union = 0.0;
 				for (int n = 0; n < Result_B[j].rows; n++) {
 					for (int m = 0; m < Result_B[j].cols; m++) {
-						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+						if (GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255) || Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
 							Union += 1.0;
-							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
+							if (Result_B[j].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255) && GT_B[i].at<cv::Vec3b>(n, m) == cv::Vec3b(255, 255, 255)) {
 								Overlap += 1.0;
 							}
 						}
@@ -445,7 +451,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 		}
 		float TP_tmp = TP;
 		for (int i = 0; i < num_R; i++) {
-			if (Pre_num[0][i] >= 0.7 || Pre_num[1][i] >= 0.7) { TP += 1.0; }
+			if (Pre_num[0][i] >= iou || Pre_num[1][i] >= iou) { TP += 1.0; }
 			else { FP += 1.0; }
 
 			if (0.3 <= Pre_num[0][i] && Pre_num[0][i] <= 0.7 || 0.3 <= Pre_num[1][i] && Pre_num[1][i] <= 0.7) {
@@ -460,7 +466,7 @@ void Result_ROC_2(float yudo, char* Result_file, char* Save_file, int flag) {
 	float Precision = TP / (TP + FP);
 	float Recall = TP / (TP + FN);
 	float FPPI = FP / 203.0;
-	fprintf_s(Save, "%f, %.0f, %.0f, %.0f, %.0f, %f, %f, %f\n", yudo, TP, FP, FN, parts, Precision, Recall, FPPI);
+	fprintf_s(Save, "%.0f, %.0f, %.0f, %f, %f, %f\n", TP, FP, FN, Precision, Recall, FPPI);
 	fclose(Save);
 	fclose(List);
 }
@@ -473,6 +479,10 @@ void IoU_Result() {
 		cout << "not found List file" << endl;
 		return;
 	}
+
+
+	float TP, FP, FN;
+
 	while (fgets(List_n, 256, List) != NULL) {
 		string List_str = List_n;
 		char List_name[1024];
@@ -504,7 +514,7 @@ void IoU_Result() {
 		}
 		fclose(GT);
 
-		char Result_name[1024] = "C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.7_40/";
+		char Result_name[1024] = "C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/";
 		strcat_s(Result_name, List_name);
 		//Resultファイル読み込み
 		char Result_n[5][1024];
@@ -513,7 +523,7 @@ void IoU_Result() {
 			cout << "not found Result file" << endl;
 			return;
 		}
-		Place place_Result[100];
+		Place place_Result[200];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -526,13 +536,20 @@ void IoU_Result() {
 			fgets(Result_n[2], 256, Result);
 			fgets(Result_n[3], 256, Result);
 			fgets(Result_n[4], 256, Result);
-
-
+			
 			place_Result[num_R].yudo = atof(Result_n[0]);
 			place_Result[num_R].x = atoi(Result_n[1]);
 			place_Result[num_R].y = atoi(Result_n[2]);
 			place_Result[num_R].width = atoi(Result_n[3]);
 			place_Result[num_R].height = atoi(Result_n[4]);
+			if (place_Result[num_R].yudo < YUDO) {
+				place_Result[num_R].yudo = 0;
+				place_Result[num_R].x = -1;
+				place_Result[num_R].y = -1;
+				place_Result[num_R].width = -1;
+				place_Result[num_R].height = -1;
+				continue;
+			}
 			num_R++;
 		}
 		fclose(Result);
@@ -543,7 +560,7 @@ void IoU_Result() {
 		for (int i = 0; i < num_G; i++) {
 			GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 		}
-		cv::Mat Result_Binary[100];
+		cv::Mat Result_Binary[200];
 		for (int i = 0; i < num_R; i++) {
 			Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 		}
@@ -563,8 +580,8 @@ void IoU_Result() {
 				}
 			}
 		}
-		float IoU_num[100];
-		for (int i = 0; i < 100; i++) {
+		float IoU_num[200];
+		for (int i = 0; i < 200; i++) {
 			IoU_num[i] = -1;
 		}
 
@@ -576,13 +593,22 @@ void IoU_Result() {
 				}
 			}
 		}
-
-		cout << List_name << ",";
+//		float average = 0;
 		for (int i = 0; i < num_R; i++) {
-			cout << IoU_num[i] << ",";
+			if (IoU_num[i] < 0.3) { FP += 1.0; }
+			else TP += 1.0;
+//			if(average<IoU_num[i])
+//			average = IoU_num[i];
 		}
-		cout << endl;
+		if(num_G>TP) FN = num_G - TP;
+		else FN = 1.0;
+//		cout << average << endl;
+//		for (int i = 0; i < num_R; i++) {
+//			cout << IoU_num[i] << ",";
+//		}
 	}
+
+
 
 	fclose(List);
 }
@@ -595,9 +621,9 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 	float FN = 0;
 	float TN = 0;
 
-	int Label[490],Result_label[490];
-	for (int i = 0; i < 490; i++) {
-		if (i < 277)Label[i] = -1;
+	int Label[363],Result_label[363];
+	for (int i = 0; i < 363; i++) {
+		if (i < 150)Label[i] = -1;
 		else Label[i] = 1;
 
 		Result_label[i] = 0;
@@ -612,7 +638,7 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 	//テキストファイルのリスト読み込み
 	char List_n[1024];
 	FILE *List;
-	if (fopen_s(&List, "c:/photo/predict-text.txt", "r") != 0) {
+	if (fopen_s(&List, "c:/photo/predict-nor-text.txt", "r") != 0) {
 		cout << "not found List file" << endl;
 		return;
 	}
@@ -639,25 +665,28 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 			return;
 		}
 
-		Place place_Result;
+		Place place_Result[2];
 		fgets(Result_n, 256, Result);
+
+		place_Result[0].yudo = atof(Result_n);
 
 		if (flag == 1)fgets(Result_n, 256, Result);
 
-		place_Result.yudo = atof(Result_n);
+		place_Result[1].yudo = atof(Result_n);
 		
 		//尤度チェック
-		if (place_Result.yudo < yudo) {
-			Result_label[num] = -1;
+		if (place_Result[0].yudo >= 0.5) {
+			if (place_Result[1].yudo < yudo)Result_label[num] = -1;
+			else Result_label[num] = 1;
 		}
-		else Result_label[num] = 1;
+		else Result_label[num] = -1;
 
 		num++;
 
 		fclose(Result);
 	}
 
-	for (int i = 0; i < 490; i++) {
+	for (int i = 0; i < 363; i++) {
 		if (Result_label[i] == -1) {
 			if (Label[i] == -1) TN += 1.0;
 			else FN += 1.0;
@@ -680,20 +709,21 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 	fclose(List);
 }
 
+/*
 int main(int argc, char** argv) {
-	char Result_file_OOP[1024]="c:/photo/result_data_from_demo/2018_01_21_AP/result_data/";
-	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_21_EP/result_data/";
-	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/result_data/";
+//	char Result_file_OOP[1024]="c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
+//	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_21_EP/back_data/";
+	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
 
-	char Save_file_OOP[1024]="ROC_data_OOP.txt";
-	char Save_file_EP[1024]="ROC_data_EP.txt";
-	char Save_file_AP[1024]="ROC_data_AP.txt";
+//	char Save_file_OOP[1024]="ROC_back_OOP.txt";
+//	char Save_file_EP[1024]="ROC_back_EP.txt";
+	char Save_file_AP[1024]="ROC_back_AP_CD05.txt";
 
 	double i = 0.0;
 	while (i <= 1.0) {
-		cout << i << ",";
-		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
-		ROC_data(i, Result_file_EP, Save_file_EP,0);
+//		cout << i << ",";
+//		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
+//		ROC_data(i, Result_file_EP, Save_file_EP,0);
 		ROC_data(i, Result_file_AP, Save_file_AP, 1);
 
 //		if (i < 0.8) i += 0.1;
@@ -703,5 +733,119 @@ int main(int argc, char** argv) {
 	}
 	cout << endl;
 	
+	return 0;
+}
+*/
+
+
+int main(int argc, char** argv) {
+//	IoU_Result();
+
+	char Result_file_AP[20][1024] = {
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_110/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_120/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_130/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_140/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_150/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_160/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_170/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_180/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_190/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_200/" ,
+	};
+
+	char Result_file_EP[20][1024] = {
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_10/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_20/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_30/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_40/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_50/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_60/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_70/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_80/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_90/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_100/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_110/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_120/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_130/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_140/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_150/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_160/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_170/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_180/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_190/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_200/" ,
+	};
+
+	char Save_file_AP[20][1024] = { 
+		"IoUvs_AP/IoUvs_AP2.txt" ,
+		"IoUvs_AP/IoUvs_AP_20.txt" , 
+		"IoUvs_AP/IoUvs_AP_30.txt" , 
+		"IoUvs_AP/IoUvs_AP_40.txt" , 
+		"IoUvs_AP/IoUvs_AP_50.txt" , 
+		"IoUvs_AP/IoUvs_AP_60.txt" , 
+		"IoUvs_AP/IoUvs_AP_70.txt" , 
+		"IoUvs_AP/IoUvs_AP_80.txt" , 
+		"IoUvs_AP/IoUvs_AP_90.txt" , 
+		"IoUvs_AP/IoUvs_AP_100.txt" , 
+		"IoUvs_AP/IoUvs_AP_110.txt" , 
+		"IoUvs_AP/IoUvs_AP_120.txt" , 
+		"IoUvs_AP/IoUvs_AP_130.txt" , 
+		"IoUvs_AP/IoUvs_AP_140.txt" , 
+		"IoUvs_AP/IoUvs_AP_150.txt" , 
+		"IoUvs_AP/IoUvs_AP_160.txt" , 
+		"IoUvs_AP/IoUvs_AP_170.txt" , 
+		"IoUvs_AP/IoUvs_AP_180.txt" , 
+		"IoUvs_AP/IoUvs_AP_190.txt" , 
+		"IoUvs_AP/IoUvs_AP_200.txt" , 
+	};
+
+	char Save_file_EP[20][1024] = {
+		"IoUvs_EP/IoUvs_EP.txt" ,
+		"IoUvs_EP/IoUvs_EP_20.txt" ,
+		"IoUvs_EP/IoUvs_EP_30.txt" ,
+		"IoUvs_EP/IoUvs_EP_40.txt" ,
+		"IoUvs_EP/IoUvs_EP_50.txt" ,
+		"IoUvs_EP/IoUvs_EP_60.txt" ,
+		"IoUvs_EP/IoUvs_EP_70.txt" ,
+		"IoUvs_EP/IoUvs_EP_80.txt" ,
+		"IoUvs_EP/IoUvs_EP_90.txt" ,
+		"IoUvs_EP/IoUvs_EP_100.txt" ,
+		"IoUvs_EP/IoUvs_EP_110.txt" ,
+		"IoUvs_EP/IoUvs_EP_120.txt" ,
+		"IoUvs_EP/IoUvs_EP_130.txt" ,
+		"IoUvs_EP/IoUvs_EP_140.txt" ,
+		"IoUvs_EP/IoUvs_EP_150.txt" ,
+		"IoUvs_EP/IoUvs_EP_160.txt" ,
+		"IoUvs_EP/IoUvs_EP_170.txt" ,
+		"IoUvs_EP/IoUvs_EP_180.txt" ,
+		"IoUvs_EP/IoUvs_EP_190.txt" ,
+		"IoUvs_EP/IoUvs_EP_200.txt" ,
+	};
+
+	int i = 0;
+//	for (int i = 0; i < 20; i++) {
+		float iou=0.50;
+		for (int k = 0; k < 100; k++) {
+	//		cout << "EP, ";
+	//		Result_ROC(0.921, iou, Result_file_EP[i], Save_file_EP[i]);
+			cout << "AP";
+			Result_ROC_2(0.679, iou, Result_file_AP[i], Save_file_AP[i], 0);
+			iou += 0.005;
+		}
+
+		cout << endl;
+//	}
+
 	return 0;
 }
