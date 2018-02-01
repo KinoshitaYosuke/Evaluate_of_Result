@@ -350,11 +350,11 @@ void Result_ROC_2(float yudo, float iou, char* Result_file, char* Save_file, int
 			fgets(Result_n[8], 256, Result);
 			fgets(Result_n[9], 256, Result);
 
-			place_Result[num_R].yudo = atof(Result_n[0]);
-			if (place_Result[num_R].yudo < 0.711) {
-				place_Result[num_R].yudo = 0;
-				continue;
-			}
+		//	place_Result[num_R].yudo = atof(Result_n[0]);
+		//	if (place_Result[num_R].yudo < 0.5) {
+		//		place_Result[num_R].yudo = 0;
+		//		continue;
+		//	}
 
 			if (flag == 1) {
 				place_Result[num_R].yudo = atof(Result_n[0]);
@@ -675,11 +675,11 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 		place_Result[1].yudo = atof(Result_n);
 		
 		//尤度チェック
-		if (place_Result[0].yudo >= 0.5) {
+	//	if (place_Result[0].yudo >= 0.5) {
 			if (place_Result[1].yudo < yudo)Result_label[num] = -1;
 			else Result_label[num] = 1;
-		}
-		else Result_label[num] = -1;
+//		}
+//		else Result_label[num] = -1;
 
 		num++;
 
@@ -709,22 +709,22 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 	fclose(List);
 }
 
-/*
+
 int main(int argc, char** argv) {
 //	char Result_file_OOP[1024]="c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
-//	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_21_EP/back_data/";
-	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
+	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_31_EP/result_data/";
+//	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
 
 //	char Save_file_OOP[1024]="ROC_back_OOP.txt";
-//	char Save_file_EP[1024]="ROC_back_EP.txt";
-	char Save_file_AP[1024]="ROC_back_AP_CD05.txt";
+	char Save_file_EP[1024]="ROC_back_EP_neo.txt";
+//	char Save_file_AP[1024]="ROC_back_AP_CD05.txt";
 
 	double i = 0.0;
 	while (i <= 1.0) {
 //		cout << i << ",";
 //		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
-//		ROC_data(i, Result_file_EP, Save_file_EP,0);
-		ROC_data(i, Result_file_AP, Save_file_AP, 1);
+		ROC_data(i, Result_file_EP, Save_file_EP,0);
+//		ROC_data(i, Result_file_AP, Save_file_AP, 1);
 
 //		if (i < 0.8) i += 0.1;
 //		else if (i < 0.99)i += 0.01;
@@ -735,9 +735,9 @@ int main(int argc, char** argv) {
 	
 	return 0;
 }
-*/
 
 
+/*
 int main(int argc, char** argv) {
 //	IoU_Result();
 
@@ -788,7 +788,7 @@ int main(int argc, char** argv) {
 	};
 
 	char Save_file_AP[20][1024] = { 
-		"IoUvs_AP/IoUvs_AP2.txt" ,
+		"IoUvs_AP/IoUvs_AP3.txt" ,
 		"IoUvs_AP/IoUvs_AP_20.txt" , 
 		"IoUvs_AP/IoUvs_AP_30.txt" , 
 		"IoUvs_AP/IoUvs_AP_40.txt" , 
@@ -811,7 +811,7 @@ int main(int argc, char** argv) {
 	};
 
 	char Save_file_EP[20][1024] = {
-		"IoUvs_EP/IoUvs_EP.txt" ,
+		"IoUvs_EP/IoUvs_EP3.txt" ,
 		"IoUvs_EP/IoUvs_EP_20.txt" ,
 		"IoUvs_EP/IoUvs_EP_30.txt" ,
 		"IoUvs_EP/IoUvs_EP_40.txt" ,
@@ -835,12 +835,12 @@ int main(int argc, char** argv) {
 
 	int i = 0;
 //	for (int i = 0; i < 20; i++) {
-		float iou=0.50;
-		for (int k = 0; k < 100; k++) {
-	//		cout << "EP, ";
-	//		Result_ROC(0.921, iou, Result_file_EP[i], Save_file_EP[i]);
+		float iou=0.0;
+		for (int k = 0; k < 200; k++) {
+			cout << "EP, ";
+			Result_ROC(0.921, iou, Result_file_EP[i], Save_file_EP[i]);
 			cout << "AP";
-			Result_ROC_2(0.679, iou, Result_file_AP[i], Save_file_AP[i], 0);
+			Result_ROC_2(0.916, iou, Result_file_AP[i], Save_file_AP[i], 0);
 			iou += 0.005;
 		}
 
@@ -849,3 +849,4 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
+*/
