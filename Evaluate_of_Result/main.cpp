@@ -471,7 +471,7 @@ void Result_ROC_2(float yudo, float iou, char* Result_file, char* Save_file, int
 	fclose(List);
 }
 
-void IoU_Result() {
+void IoU_Result(char* Result_file, char* Save_file, int flag, float yudo) {
 	//テキストファイルのリスト読み込み
 	char List_n[1024];
 	FILE *List;
@@ -480,8 +480,13 @@ void IoU_Result() {
 		return;
 	}
 
+	FILE* Save;
+	if (fopen_s(&Save, Save_file, "a") != 0) {
+		cout << "error" << endl;
+		return;
+	}
 
-	float TP, FP, FN;
+	float TP = 0, FP = 0, FN = 0;
 
 	while (fgets(List_n, 256, List) != NULL) {
 		string List_str = List_n;
@@ -514,7 +519,12 @@ void IoU_Result() {
 		}
 		fclose(GT);
 
-		char Result_name[1024] = "C:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/";
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_file[i];
+			if (Result_file[i] == '\0')break;
+		}
+
 		strcat_s(Result_name, List_name);
 		//Resultファイル読み込み
 		char Result_n[5][1024];
@@ -523,7 +533,7 @@ void IoU_Result() {
 			cout << "not found Result file" << endl;
 			return;
 		}
-		Place place_Result[200];
+		Place place_Result[500];
 		int num_R = 0;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
@@ -531,18 +541,20 @@ void IoU_Result() {
 			fgets(Result_n[3], 256, Result);
 			fgets(Result_n[4], 256, Result);
 
-			fgets(Result_n[0], 256, Result);
-			fgets(Result_n[1], 256, Result);
-			fgets(Result_n[2], 256, Result);
-			fgets(Result_n[3], 256, Result);
-			fgets(Result_n[4], 256, Result);
-			
+			if (flag == 1) {
+				fgets(Result_n[0], 256, Result);
+				fgets(Result_n[1], 256, Result);
+				fgets(Result_n[2], 256, Result);
+				fgets(Result_n[3], 256, Result);
+				fgets(Result_n[4], 256, Result);
+			}
+
 			place_Result[num_R].yudo = atof(Result_n[0]);
 			place_Result[num_R].x = atoi(Result_n[1]);
 			place_Result[num_R].y = atoi(Result_n[2]);
 			place_Result[num_R].width = atoi(Result_n[3]);
 			place_Result[num_R].height = atoi(Result_n[4]);
-			if (place_Result[num_R].yudo < YUDO) {
+			if (place_Result[num_R].yudo < yudo) {
 				place_Result[num_R].yudo = 0;
 				place_Result[num_R].x = -1;
 				place_Result[num_R].y = -1;
@@ -560,7 +572,7 @@ void IoU_Result() {
 		for (int i = 0; i < num_G; i++) {
 			GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 		}
-		cv::Mat Result_Binary[200];
+		cv::Mat Result_Binary[500];
 		for (int i = 0; i < num_R; i++) {
 			Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 		}
@@ -580,8 +592,8 @@ void IoU_Result() {
 				}
 			}
 		}
-		float IoU_num[200];
-		for (int i = 0; i < 200; i++) {
+		float IoU_num[500];
+		for (int i = 0; i < 500; i++) {
 			IoU_num[i] = -1;
 		}
 
@@ -593,24 +605,36 @@ void IoU_Result() {
 				}
 			}
 		}
-//		float average = 0;
+		int TP_tmp = 0;
+		float average = 0;
 		for (int i = 0; i < num_R; i++) {
-			if (IoU_num[i] < 0.3) { FP += 1.0; }
-			else TP += 1.0;
-//			if(average<IoU_num[i])
-//			average = IoU_num[i];
+			if (IoU_num[i] > average) {
+				average = IoU_num[i];
+			}
 		}
-		if(num_G>TP) FN = num_G - TP;
-		else FN = 1.0;
-//		cout << average << endl;
+		fprintf_s(Save, "%f\n", average);
+
+//		for (int i = 0; i < num_R; i++) {
+//			if (IoU_num[i] < 0.5) { FP += 1.0; }
+//			else {TP += 1.0; TP_tmp++;}
+//			if(average<IoU_num[i])
+//			average += IoU_num[i];
+		}
+//		if (num_G > TP_tmp) FN += num_G - TP_tmp;
+//		cout << average/num_R << endl;
 //		for (int i = 0; i < num_R; i++) {
 //			cout << IoU_num[i] << ",";
 //		}
-	}
 
+//	}
+//	cout << FN << endl;
+//	float FPPI = FP / 203.0;
+//	float MR = 1.0 - ((213 - FN) / 213);
 
+	fclose(Save);
 
 	fclose(List);
+
 }
 
 void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
@@ -711,28 +735,102 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 
 
 int main(int argc, char** argv) {
-//	char Result_file_OOP[1024]="c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
-	char Result_file_EP[1024]= "c:/photo/result_data_from_demo/2018_01_31_EP/result_data/";
-//	char Result_file_AP[1024]= "c:/photo/result_data_from_demo/2018_01_21_AP/back_data/";
 
-//	char Save_file_OOP[1024]="ROC_back_OOP.txt";
-	char Save_file_EP[1024]="ROC_back_EP_neo.txt";
-//	char Save_file_AP[1024]="ROC_back_AP_CD05.txt";
+	char Result_file_AP[20][1024] = {
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_110/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_120/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_130/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_140/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_150/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_160/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_170/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_180/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_190/" ,
+		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_200/" ,
+	};
 
-	double i = 0.0;
-	while (i <= 1.0) {
-//		cout << i << ",";
-//		ROC_data(i, Result_file_OOP, Save_file_OOP,0);
-		ROC_data(i, Result_file_EP, Save_file_EP,0);
-//		ROC_data(i, Result_file_AP, Save_file_AP, 1);
+	char Result_file_EP[20][1024] = {
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_10/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_20/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_30/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_40/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_50/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_60/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_70/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_80/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_90/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_100/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_110/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_120/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_130/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_140/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_150/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_160/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_170/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_180/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_190/" ,
+		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_200/" ,
+	};
 
-//		if (i < 0.8) i += 0.1;
-//		else if (i < 0.99)i += 0.01;
-//		else i += 0.0001;
-		i += 0.0001;
+	char Save_file_AP[20][1024] = {
+		"IoU_maximam_AP_10.txt" ,
+		"IoU_maximam_AP_20.txt" ,
+		"IoU_maximam_AP_30.txt" ,
+		"IoU_maximam_AP_40.txt" ,
+		"IoU_maximam_AP_50.txt" ,
+		"IoU_maximam_AP_60.txt" ,
+		"IoU_maximam_AP_70.txt" ,
+		"IoU_maximam_AP_80.txt" ,
+		"IoU_maximam_AP_90.txt" ,
+		"IoU_maximam_AP_100.txt" ,
+		"IoU_maximam_AP_110.txt" ,
+		"IoU_maximam_AP_120.txt" ,
+		"IoU_maximam_AP_130.txt" ,
+		"IoU_maximam_AP_140.txt" ,
+		"IoU_maximam_AP_150.txt" ,
+		"IoU_maximam_AP_160.txt" ,
+		"IoU_maximam_AP_170.txt" ,
+		"IoU_maximam_AP_180.txt" ,
+		"IoU_maximam_AP_190.txt" ,
+		"IoU_maximam_AP_200.txt" ,
+	};
+
+	char Save_file_EP[20][1024] = {
+		"IoU_maximam_EP_10.txt" ,
+		"IoU_maximam_EP_20.txt" ,
+		"IoU_maximam_EP_30.txt" ,
+		"IoU_maximam_EP_40.txt" ,
+		"IoU_maximam_EP_50.txt" ,
+		"IoU_maximam_EP_60.txt" ,
+		"IoU_maximam_EP_70.txt" ,
+		"IoU_maximam_EP_80.txt" ,
+		"IoU_maximam_EP_90.txt" ,
+		"IoU_maximam_EP_100.txt" ,
+		"IoU_maximam_EP_110.txt" ,
+		"IoU_maximam_EP_120.txt" ,
+		"IoU_maximam_EP_130.txt" ,
+		"IoU_maximam_EP_140.txt" ,
+		"IoU_maximam_EP_150.txt" ,
+		"IoU_maximam_EP_160.txt" ,
+		"IoU_maximam_EP_170.txt" ,
+		"IoU_maximam_EP_180.txt" ,
+		"IoU_maximam_EP_190.txt" ,
+		"IoU_maximam_EP_200.txt" ,
+	};
+	for (int i = 0; i < 20; i++) {
+		IoU_Result(Result_file_AP[i], Save_file_AP[i], 1, 0.916);
+		IoU_Result(Result_file_EP[i], Save_file_EP[i], 0, 0.921);
 	}
-	cout << endl;
-	
 	return 0;
 }
 
