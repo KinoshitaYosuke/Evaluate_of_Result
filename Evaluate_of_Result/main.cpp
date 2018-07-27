@@ -5,8 +5,11 @@
 
 using namespace std;
 
-#define YUDO 0.916
+#define YUDO 0.8
 #define IOU_OUTPUT 0.9
+
+char GT_Text_Name[1024] = "";
+char Result_Text_Name[1024] = "";
 
 class Place {
 public:
@@ -23,7 +26,8 @@ public:
 	}
 };
 
-float evaluation(cv::Mat RE,cv::Mat GT) {
+//IoUの計算
+float calculate_IoU(cv::Mat RE,cv::Mat GT) {
 	float Overlap = 0.0, Union = 0.0;
 	for (int n = 0; n < RE.rows; n++) {
 		for (int m = 0; m < RE.cols; m++) {
@@ -39,7 +43,8 @@ float evaluation(cv::Mat RE,cv::Mat GT) {
 	return Overlap / Union;
 }
 
-float evaluation_2(cv::Mat RE, cv::Mat GT) {
+//Result領域/(GT領域+Result領域)の計算
+float calculate_Overlap(cv::Mat RE, cv::Mat GT) {
 	float Overlap = 0.0, Union = 0.0;
 	for (int n = 0; n < RE.rows; n++) {
 		for (int m = 0; m < RE.cols; m++) {
@@ -54,6 +59,276 @@ float evaluation_2(cv::Mat RE, cv::Mat GT) {
 
 	return Overlap / Union;
 }
+/*
+//GTの2値画像生成
+void Generate_GT() {
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+		char GT_name[1024] = "c:/photo/GT_text/";
+		strcat_s(GT_name, List_name);
+
+		//GTファイル読み込み
+		char GT_n[4][1024];
+		FILE *GT;
+		if (fopen_s(&GT, GT_name, "r") != 0) {
+			cout << "not found GT file" << endl;
+			return;
+		}
+		Place place_GT[10];
+		int num_G = 0;
+		while (fgets(GT_n[0], 256, GT) != NULL) {	//すべて読み込み，変数に格納
+			fgets(GT_n[1], 256, GT);
+			fgets(GT_n[2], 256, GT);
+			fgets(GT_n[3], 256, GT);
+
+			place_GT[num_G].x = atoi(GT_n[0]);
+			place_GT[num_G].y = atoi(GT_n[1]);
+			place_GT[num_G].width = atoi(GT_n[2]);
+			place_GT[num_G].height = atoi(GT_n[3]);
+			num_G++;
+		}
+		fclose(GT);
+
+		for (int i = 0; i < num_G; i++) {
+			GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+		}
+
+		for (int i = 0; i < num_G; i++) {
+			for (int n = place_GT[i].y; n < place_GT[i].y + place_GT[i].height; n++) {
+				for (int m = place_GT[i].x; m < place_GT[i].x + place_GT[i].width; m++) {
+					GT_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+				}
+			}
+		}
+	}
+	fclose(List);
+}
+
+//Resultの2値画像生成
+void Generate_Result() {
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+
+	char Result_name[1024] = "";
+
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+
+		char Result_Text[1024];
+		for (int i = 0; ; i++) {
+			if(Result_Text_Name[i]=='\0')
+			Result_Text[i] = Result_Text_Name[i];
+		}
+
+		strcat_s(Result_Text_Name, List_name);
+		
+		//Resultファイル読み込み
+		char Result_n[5][1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return;
+		}
+		Place place_Result[500];
+		int num_R = 0;
+		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+
+			place_Result[num_R].yudo = atof(Result_n[0]);
+			place_Result[num_R].x = atoi(Result_n[1]);
+			place_Result[num_R].y = atoi(Result_n[2]);
+			place_Result[num_R].width = atoi(Result_n[3]);
+			place_Result[num_R].height = atoi(Result_n[4]);
+			if (place_Result[num_R].yudo < YUDO) {
+				place_Result[num_R].yudo = 0;
+				place_Result[num_R].x = -1;
+				place_Result[num_R].y = -1;
+				place_Result[num_R].width = -1;
+				place_Result[num_R].height = -1;
+				continue;
+			}
+			num_R++;
+		}
+		fclose(Result);
+
+		cv::Mat Result_Binary[500];
+		for (int i = 0; i < num_R; i++) {
+			Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+		}
+
+		for (int i = 0; i < num_R; i++) {
+			for (int n = place_Result[i].y; n < place_Result[i].y + place_Result[i].height; n++) {
+				for (int m = place_Result[i].x; m < place_Result[i].x + place_Result[i].width; m++) {
+					Result_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+				}
+			}
+		}
+	}
+
+	fclose(List);
+}
+
+//TP,FP,FNの計算
+void show_TP_FP_FN_IoU_value() {
+	float TP = 0, FP = 0, FN = 0, IoU = 0;
+	int RE_num = 0, GT_num = 0;
+	while (1) {
+		//ファイルパス
+		char GT_Name[1024] = "";
+		char Result_Name[1024] = "";
+
+		strcpy_s(GT_Name, GT_Text_Name);
+		strcpy_s(Result_Name, Result_Text_Name);
+
+		//2値画像生成
+		cv::Mat Result_Binary[10];
+		cv::Mat GT_Binary[10];
+
+		//テキストファイルのリスト読み込み
+		char List_n[1024];
+		FILE *List;
+		if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+			cout << "not found List file" << endl;
+			return;
+		}
+		while (fgets(List_n, 256, List) != NULL) {
+			string List_str = List_n;
+			char List_name[1024];
+			for (int i = 0; i < List_str.length() - 1; i++) {
+				List_name[i] = List_n[i];
+				List_name[i + 1] = '\0';
+			}
+			char GT_name[1024] = "c:/photo/GT_text/";
+			strcat_s(GT_name, List_name);
+			//GTファイル読み込み
+			char GT_n[4][1024];
+			FILE *GT;
+			if (fopen_s(&GT, GT_name, "r") != 0) {
+				cout << "not found GT file" << endl;
+				return;
+			}
+			Place place_GT[10];
+			int num_G = 0;
+			while (fgets(GT_n[0], 256, GT) != NULL) {	//すべて読み込み，変数に格納
+				fgets(GT_n[1], 256, GT);
+				fgets(GT_n[2], 256, GT);
+				fgets(GT_n[3], 256, GT);
+
+				place_GT[num_G].x = atoi(GT_n[0]);
+				place_GT[num_G].y = atoi(GT_n[1]);
+				place_GT[num_G].width = atoi(GT_n[2]);
+				place_GT[num_G].height = atoi(GT_n[3]);
+				num_G++;
+			}
+			fclose(GT);
+
+
+			strcat_s(Result_Text_Name, List_name);
+			//Resultファイル読み込み
+			char Result_n[5][1024];
+			FILE *Result;
+			if (fopen_s(&Result, Result_Text_Name, "r") != 0) {
+				cout << "not found Result file" << endl;
+				return;
+			}
+			Place place_Result[500];
+			int num_R = 0;
+			while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+				fgets(Result_n[1], 256, Result);
+				fgets(Result_n[2], 256, Result);
+				fgets(Result_n[3], 256, Result);
+				fgets(Result_n[4], 256, Result);
+
+				if (flag == 1) {
+					fgets(Result_n[0], 256, Result);
+					fgets(Result_n[1], 256, Result);
+					fgets(Result_n[2], 256, Result);
+					fgets(Result_n[3], 256, Result);
+					fgets(Result_n[4], 256, Result);
+				}
+
+				place_Result[num_R].yudo = atof(Result_n[0]);
+				place_Result[num_R].x = atoi(Result_n[1]);
+				place_Result[num_R].y = atoi(Result_n[2]);
+				place_Result[num_R].width = atoi(Result_n[3]);
+				place_Result[num_R].height = atoi(Result_n[4]);
+				if (place_Result[num_R].yudo < yudo) {
+					place_Result[num_R].yudo = 0;
+					place_Result[num_R].x = -1;
+					place_Result[num_R].y = -1;
+					place_Result[num_R].width = -1;
+					place_Result[num_R].height = -1;
+					continue;
+				}
+				num_R++;
+			}
+			fclose(Result);
+
+			//バイナリ画像生成
+			cv::Mat GT_Binary[10];
+
+			for (int i = 0; i < num_G; i++) {
+				GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+			}
+			cv::Mat Result_Binary[500];
+			for (int i = 0; i < num_R; i++) {
+				Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+			}
+
+			for (int i = 0; i < num_G; i++) {
+				for (int n = place_GT[i].y; n < place_GT[i].y + place_GT[i].height; n++) {
+					for (int m = place_GT[i].x; m < place_GT[i].x + place_GT[i].width; m++) {
+						GT_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+					}
+				}
+			}
+
+			for (int i = 0; i < num_R; i++) {
+				for (int n = place_Result[i].y; n < place_Result[i].y + place_Result[i].height; n++) {
+					for (int m = place_Result[i].x; m < place_Result[i].x + place_Result[i].width; m++) {
+						Result_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+					}
+				}
+			}
+
+			//TP,FP,FN計算
+			for (int i = 0; i < RE_num; i++) {
+				for (int j = 0; j < GT_num; j++) {
+					if (calculate_Overlap(Result_Binary[i], GT_Binary[j]) >= 0.5) {
+						calculate_IoU();
+					}
+				}
+			}
+		}
+	}
+}
+*/
 
 void Result_IoU() {
 	//テスト画像ファイル一覧メモ帳読み込み
@@ -81,7 +356,7 @@ void Result_IoU() {
 		//		cv::imshow("GT", GT);
 		//		cv::imshow("RE", RE);
 		//		cvWaitKey(10);
-		cout << new_result_name << "," << evaluation(RE, GT) << endl;
+		cout << new_result_name << "," << calculate_IoU(RE, GT) << endl;
 
 	}
 
@@ -92,6 +367,89 @@ void Result_IoU() {
 cv::Mat draw_rectangle(cv::Mat ans_im, int x, int y, int width, int height, int r, int g, int b) {
 	rectangle(ans_im, cvPoint(x, y), cvPoint(x + width, y + height), CV_RGB(r, g, b), 1);
 	return ans_im;
+}
+
+void check_rectangle(float yudo, char* Result_file, int flag) {
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/test_text/text_list_all_person.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return;
+	}
+
+	while (fgets(List_n, 256, List) != NULL) {
+		
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
+		}
+
+		char Img_path[1024] = "c:/test_images/";
+		strcat_s(Img_path, List_name);
+		printf("%s\n", Img_path);
+		for (int i = 0; ; i++) {
+			if (Img_path[i] == '.') {
+				Img_path[i] = '.';
+				Img_path[i+1] = 'b';
+				Img_path[i+2] = 'm';
+				Img_path[i+3] = 'p';
+				break;
+			}
+		}
+		cv::Mat img = cv::imread(Img_path, 0);
+
+
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_file[i];
+			if (Result_file[i] == '\0')break;
+		}
+
+		strcat_s(Result_name, List_name);
+		//Resultファイル読み込み
+		char Result_n[5][1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return;
+		}
+		int num_R = 0;
+		Place place_Result[20];
+		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+
+			if (flag == 1) {
+				fgets(Result_n[0], 256, Result);
+				fgets(Result_n[1], 256, Result);
+				fgets(Result_n[2], 256, Result);
+				fgets(Result_n[3], 256, Result);
+				fgets(Result_n[4], 256, Result);
+			}
+			place_Result[num_R].yudo = atof(Result_n[0]);
+			place_Result[num_R].x = atoi(Result_n[1]);
+			place_Result[num_R].y = atoi(Result_n[2]);
+			place_Result[num_R].width = atoi(Result_n[3]);
+			place_Result[num_R].height = atoi(Result_n[4]);
+			place_Result[num_R].width -= place_Result[num_R].x;
+			place_Result[num_R].height -= place_Result[num_R].y;
+			num_R++;
+		}
+		fclose(Result);
+
+		for (int i = 0; i < num_R; i++) {
+			img = draw_rectangle(img, place_Result[i].x, place_Result[i].y, place_Result[i].width, place_Result[i].height, 0, 255, 0);
+		}
+		cv::imshow("", img);
+		cv::waitKey(0);
+	}
+	fclose(List);
+
 }
 
 void Result_ROC(float yudo, float iou, char* Result_file,char* Save_file) {
@@ -616,7 +974,7 @@ void Result_TP(char* Result_file, char* Save_file, int flag, float yudo) {
 
 		for (int i = 0; i < num_G; i++) {
 			for (int j = 0; j < num_R; j++) {
-				float tmp = evaluation_2(Result_Binary[j], GT_Binary[i]);
+				float tmp = calculate_Overlap(Result_Binary[j], GT_Binary[i]);
 				if (IoU_num[j] < tmp) {
 					IoU_num[j] = tmp;
 				}
@@ -737,31 +1095,31 @@ void ROC_data(float yudo, char* Result_file, char* Save_file, int flag) {
 	fclose(List);
 }
 
-void IoU_Result(float yudo, char* Result_file, char* Save_file, int flag){
+//単独人物画像
+void IoU_Result(float yudo, char* Result_file, int flag) {
 	//テキストファイルのリスト読み込み
 	char List_n[1024];
 	FILE *List;
-	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+	if (fopen_s(&List, "c:/test_text/text_list_only_one_person.txt", "r") != 0) {
 		cout << "not found List file" << endl;
 		return;
 	}
 
-	FILE* Save;
-	if (fopen_s(&Save, Save_file, "a") != 0) {
-		cout << "error" << endl;
-		return;
-	}
-
 	float TP = 0, FP = 0, FN = 0;
-
+	float tmp = 0;
+	
+	int point = 0;
 	while (fgets(List_n, 256, List) != NULL) {
+		cout << point << endl;
+		point++;
 		string List_str = List_n;
 		char List_name[1024];
 		for (int i = 0; i < List_str.length() - 1; i++) {
 			List_name[i] = List_n[i];
 			List_name[i + 1] = '\0';
 		}
-		char GT_name[1024] = "c:/photo/GT_text/";
+
+		char GT_name[1024] = "c:/GT_text/";
 		strcat_s(GT_name, List_name);
 		//GTファイル読み込み
 		char GT_n[4][1024];
@@ -770,20 +1128,23 @@ void IoU_Result(float yudo, char* Result_file, char* Save_file, int flag){
 			cout << "not found GT file" << endl;
 			return;
 		}
-		Place place_GT[10];
+		Place place_GT;
 		int num_G = 0;
 		while (fgets(GT_n[0], 256, GT) != NULL) {	//すべて読み込み，変数に格納
 			fgets(GT_n[1], 256, GT);
 			fgets(GT_n[2], 256, GT);
 			fgets(GT_n[3], 256, GT);
 
-			place_GT[num_G].x = atoi(GT_n[0]);
-			place_GT[num_G].y = atoi(GT_n[1]);
-			place_GT[num_G].width = atoi(GT_n[2]);
-			place_GT[num_G].height = atoi(GT_n[3]);
+			place_GT.x = atoi(GT_n[0]);
+			place_GT.y = atoi(GT_n[1]);
+			place_GT.width = atoi(GT_n[2]);
+			place_GT.height = atoi(GT_n[3]);
 			num_G++;
 		}
 		fclose(GT);
+
+		int num_R = 0;
+		float max_yudo = 0;
 
 		char Result_name[1024];
 		for (int i = 0;; i++) {
@@ -799,8 +1160,7 @@ void IoU_Result(float yudo, char* Result_file, char* Save_file, int flag){
 			cout << "not found Result file" << endl;
 			return;
 		}
-		Place place_Result[500];
-		int num_R = 0;
+		Place place_Result;
 		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
 			fgets(Result_n[1], 256, Result);
 			fgets(Result_n[2], 256, Result);
@@ -814,103 +1174,100 @@ void IoU_Result(float yudo, char* Result_file, char* Save_file, int flag){
 				fgets(Result_n[3], 256, Result);
 				fgets(Result_n[4], 256, Result);
 			}
-
-			place_Result[num_R].yudo = atof(Result_n[0]);
-			place_Result[num_R].x = atoi(Result_n[1]);
-			place_Result[num_R].y = atoi(Result_n[2]);
-			place_Result[num_R].width = atoi(Result_n[3]);
-			place_Result[num_R].height = atoi(Result_n[4]);
-			if (place_Result[num_R].yudo < yudo) {
-				place_Result[num_R].yudo = 0;
-				place_Result[num_R].x = -1;
-				place_Result[num_R].y = -1;
-				place_Result[num_R].width = -1;
-				place_Result[num_R].height = -1;
-				continue;
-			}
 			num_R++;
+			if (atof(Result_n[0]) > max_yudo) {
+				place_Result.yudo = atof(Result_n[0]);
+				place_Result.x = atoi(Result_n[1]);
+				place_Result.y = atoi(Result_n[2]);
+				place_Result.width = atoi(Result_n[3]);
+				place_Result.height = atoi(Result_n[4]);
+				place_Result.width -= place_Result.x;
+				place_Result.height -= place_Result.y;
+				
+				max_yudo = place_Result.yudo;
+			}
+			else continue;
 		}
 		fclose(Result);
 
+
+
 		//バイナリ画像生成
-		cv::Mat GT_Binary[10];
+		cv::Mat GT_Binary = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+		cv::Mat Result_Binary = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 
-		for (int i = 0; i < num_G; i++) {
-			GT_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
-		}
-		cv::Mat Result_Binary[500];
-		for (int i = 0; i < num_R; i++) {
-			Result_Binary[i] = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
-		}
+		GT_Binary = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 
-		for (int i = 0; i < num_G; i++) {
-			for (int n = place_GT[i].y; n < place_GT[i].y + place_GT[i].height; n++) {
-				for (int m = place_GT[i].x; m < place_GT[i].x + place_GT[i].width; m++) {
-					GT_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+		Result_Binary = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+
+
+		for (int n = place_GT.y; n < place_GT.y + place_GT.height; n++) {
+			for (int m = place_GT.x; m < place_GT.x + place_GT.width; m++) {
+				GT_Binary.at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
+			}
+		}
+		if (num_R != 0) {
+			for (int n = place_Result.y; n < place_Result.y + place_Result.height; n++) {//ここがおかしい
+				for (int m = place_Result.x; m < place_Result.x + place_Result.width; m++) {
+					Result_Binary.at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
 				}
 			}
+			//			for (int i = 0; i < num_G; i++) {
+			//				FN++;
+		}
+		else {
+			FN++;
+			continue;
 		}
 
-		for (int i = 0; i < num_R; i++) {
-			for (int n = place_Result[i].y; n < place_Result[i].y + place_Result[i].height; n++) {
-				for (int m = place_Result[i].x; m < place_Result[i].x + place_Result[i].width; m++) {
-					Result_Binary[i].at<cv::Vec3b>(n, m) = cv::Vec3b(255, 255, 255);
-				}
-			}
+		if (calculate_Overlap(Result_Binary, GT_Binary) > 0.5) {
+			TP += 1.0;
+			tmp += calculate_IoU(Result_Binary, GT_Binary);
 		}
-		float IoU_num[500];
-		for (int i = 0; i < 500; i++) {
-			IoU_num[i] = -1;
+		else {
+			FP++;
+			FN++;
 		}
-		int flag = 0;
-		for (int i = 0; i < num_G; i++) {
-			for (int j = 0; j < num_R; j++) {
-				float tmp = evaluation_2(Result_Binary[j], GT_Binary[i]);
-				if (IoU_num[j] < tmp && evaluation_2(Result_Binary[j], GT_Binary[i]) >= 0.5) {
-					IoU_num[j] = tmp;
-					flag = 1;
-				}
-			}
-		}
-		int TP_tmp = 0;
-		float average = 0;
-		/*
-		for (int i = 0; i < num_R; i++) {
-			if (IoU_num[i] > average) {
-				average = IoU_num[i];
-			}
-		}
-		if(flag==1)	fprintf_s(Save, "%f\n", average);
-		*/
-		for (int i = 0; i < num_R; i++) {
-			if (IoU_num[i] < 0.5) { FP += 1.0; }
-			else { TP += 1.0; TP_tmp++; }
-			if (average < IoU_num[i])
-				average += IoU_num[i];
-		}
-		if (num_G > TP_tmp) FN += num_G - TP_tmp;
 	}
+	/*
+	float IoU_num[10];
+	for (int i = 0; i < 10; i++) {
+		IoU_num[i] = -1;
+	}
+	int flag = 0;
+	for (int i = 0; i < num_G; i++) {
+		for (int j = 0; j < num_R; j++) {
+			float tmp = calculate_Overlap(Result_Binary[j], GT_Binary[i]);
+			if (IoU_num[j] < tmp && calculate_Overlap(Result_Binary[j], GT_Binary[i]) >= 0.5) {
+				IoU_num[j] = tmp;
+				flag = 1;
+			}
+		}
+	}
+	int TP_tmp = 0;
+	float average = 0;
+	for (int i = 0; i < num_R; i++) {
+		if (IoU_num[i] < 0.5) { FP += 1.0; }
+		else { TP += 1.0; TP_tmp++;}
+		if (average < IoU_num[i])
+			average += IoU_num[i];
+	}
+	if (num_G > TP_tmp) FN += num_G - TP_tmp;
+	*/
+
 	cout << TP << "," << FP << "," << FN << endl;
-		//	cout << FN << endl;
-	
-	fclose(Save);
+	cout << tmp / TP << endl;
 
 	fclose(List);
 
 }
 
-void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
+void IoU_Result_2(float yudo, char* Result_file, int flag) {
 	//テキストファイルのリスト読み込み
 	char List_n[1024];
 	FILE *List;
-	if (fopen_s(&List, "c:/photo/text_list_4.txt", "r") != 0) {
+	if (fopen_s(&List, "c:/test_text/text_list_all_person.txt", "r") != 0) {
 		cout << "not found List file" << endl;
-		return;
-	}
-
-	FILE* Save;
-	if (fopen_s(&Save, Save_file, "a") != 0) {
-		cout << "error" << endl;
 		return;
 	}
 
@@ -924,7 +1281,7 @@ void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			List_name[i] = List_n[i];
 			List_name[i + 1] = '\0';
 		}
-		char GT_name[1024] = "c:/photo/GT_text/";
+		char GT_name[1024] = "c:/GT_text/";
 		strcat_s(GT_name, List_name);
 		//GTファイル読み込み
 		char GT_n[4][1024];
@@ -984,10 +1341,13 @@ void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
 				place_Result[num_R].y = atoi(Result_n[2]);
 				place_Result[num_R].width = atoi(Result_n[3]);
 				place_Result[num_R].height = atoi(Result_n[4]);
+				place_Result[num_R].width -= place_Result[num_R].x;
+				place_Result[num_R].height -= place_Result[num_R].y;
 				num_R++;
 	//		}
 		}
 		fclose(Result);
+
 
 		//バイナリ画像生成
 		cv::Mat GT_Binary[2] = { cv::Mat::zeros(cv::Size(640, 480), CV_8UC3),cv::Mat::zeros(cv::Size(640, 480), CV_8UC3) };
@@ -1037,7 +1397,7 @@ void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
 		
 		for (int i = 0; i < num_G; i++) {
 			for (int k = 0; k < num_R; k++) {
-				if (evaluation_2(Result_Binary[k], GT_Binary[i]) >= 0.5) {
+				if (calculate_Overlap(Result_Binary[k], GT_Binary[i]) >= 0.5) {
 					if (like_tmp < place_Result[k].yudo) {
 						like_tmp = place_Result[k].yudo;
 						max_num[i] = k;
@@ -1049,22 +1409,22 @@ void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
 			}
 		}
 
-		if (max_num[0] != -1) {
-			tmp += evaluation(Result_Binary[max_num[0]], GT_Binary[0]);
-			TP++;
-		}
-		if (max_num[1] != -1) {
-			tmp += evaluation(Result_Binary[max_num[1]], GT_Binary[1]);
-			TP++;
-		}
+	//	if (max_num[0] != -1) {
+	//		tmp += calculate_IoU(Result_Binary[max_num[0]], GT_Binary[0]);
+	//		TP++;
+	//	}
+	//	if (max_num[1] != -1) {
+	//		tmp += calculate_IoU(Result_Binary[max_num[1]], GT_Binary[1]);
+	//		TP++;
+	//	}
 
 	//	cout << tmp << endl;
-		/*
+		
 		for (int i = 0; i < num_G; i++) {
 			for (int k = 0; k < num_R; k++) {
-				if (evaluation_2(Result_Binary[k], GT_Binary[i]) >= 0.5) {
+				if (calculate_Overlap(Result_Binary[k], GT_Binary[i]) >= 0.5) {
 					TP += 1.0;
-					tmp += evaluation(Result_Binary[k], GT_Binary[i]);
+					tmp += calculate_IoU(Result_Binary[k], GT_Binary[i]);
 				}
 				else {
 					FP += 1;
@@ -1075,232 +1435,89 @@ void IoU_Result_2(float yudo, char* Result_file, char* Save_file, int flag) {
 				}
 			}
 		}
-		*/
+		
 	}
 	cout << tmp / TP << endl;
-//	cout << TP << "," << FP << "," << FN << endl;
-	fclose(Save);
+	cout << TP << "," << FP << "," << FN << endl;
+
 	fclose(List);
 
 }
 
 int main(int argc, char** argv) {
-
-	char Result_file_AP[20][1024] = {
-		"c:/photo/result_data_from_demo/2018_02_09_AP/save_data/0.9_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_110/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_120/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_130/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_140/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_150/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_160/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_170/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_180/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_190/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_200/" ,
-	};
-
-	char Result_file_EP[20][1024] = {
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.9_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.9_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_30/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_40/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_50/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_60/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_70/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_80/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_90/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_110/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_120/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_130/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_140/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_150/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_160/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_170/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_180/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_190/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_OOP/save_data/0.5_200/" ,
-	};
-
-	char Save_file_AP[20][1024] = {
-		"IoU_AP_10_max_2.txt" ,
-		"IoU_AP_20_max_2.txt" ,
-		"IoU_AP_30_max_2.txt" ,
-		"IoU_AP_40_max_2.txt" ,
-		"IoU_AP_50_max_2.txt" ,
-		"IoU_AP_60_max_2.txt" ,
-		"IoU_AP_70_max_2.txt" ,
-		"IoU_AP_80_max_2.txt" ,
-		"IoU_AP_90_max_2.txt" ,
-		"IoU_AP_100_max_2.txt" ,
-		"IoU_AP_110_max_2.txt" ,
-		"IoU_AP_120_max_2.txt" ,
-		"IoU_AP_130_max_2.txt" ,
-		"IoU_AP_140_max_2.txt" ,
-		"IoU_AP_150_max_2.txt" ,
-		"IoU_AP_160_max_2.txt" ,
-		"IoU_AP_170_max_2.txt" ,
-		"IoU_AP_180_max_2.txt" ,
-		"IoU_AP_190_max_2.txt" ,
-		"IoU_AP_200_max_2.txt" ,
-	};
-
-	char Save_file_EP[20][1024] = {
-		"IoU_OOP_10_max_2.txt" ,
-		"IoU_OOP_20_max_2.txt" ,
-		"IoU_OOP_30_max_2.txt" ,
-		"IoU_OOP_40_max_2.txt" ,
-		"IoU_OOP_50_max_2.txt" ,
-		"IoU_OOP_60_max_2.txt" ,
-		"IoU_OOP_70_max_2.txt" ,
-		"IoU_OOP_80_max_2.txt" ,
-		"IoU_OOP_90_max_2.txt" ,
-		"IoU_OOP_100_max_2.txt" ,
-		"IoU_OOP_110_max_2.txt" ,
-		"IoU_OOP_120_max_2.txt" ,
-		"IoU_OOP_130_max_2.txt" ,
-		"IoU_OOP_140_max_2.txt" ,
-		"IoU_OOP_150_max_2.txt" ,
-		"IoU_OOP_160_max_2.txt" ,
-		"IoU_OOP_170_max_2.txt" ,
-		"IoU_OOP_180_max_2.txt" ,
-		"IoU_OOP_190_max_2.txt" ,
-		"IoU_OOP_200_max_2.txt" ,
-	};
-	float yudo = 0.5;
-	int i = 0;
-//	for (int i = 0; i < 20; i++) {
-		//	IoU_Result(Result_file_AP[i], Save_file_AP[i], 1, 0.916);
-		//	IoU_Result(Result_file_EP[i], Save_file_EP[i], 0, 0.921);
-	//		IoU_Result_2(0.9, Result_file_EP[i], Save_file_EP[i], 0);
-	//		IoU_Result_2(0.9, Result_file_EP[1], Save_file_EP[1], 0);
-			IoU_Result_2(0.9, Result_file_AP[i], Save_file_AP[i], 1);
-
-//	}
-	return 0;
-}
-
-
-/*
-int main(int argc, char** argv) {
-//	IoU_Result();
-
-	char Result_file_AP[20][1024] = {
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_10/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_20/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_30/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_40/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_50/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_60/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_70/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_80/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_90/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_110/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_120/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_130/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_140/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_150/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_160/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_170/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_180/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_190/" ,
-		"c:/photo/result_data_from_demo/2018_01_15_AP/save_data/0.5_200/" ,
-	};
-
-	char Result_file_EP[20][1024] = {
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_10/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_20/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_30/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_40/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_50/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_60/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_70/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_80/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_90/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_100/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_110/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_120/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_130/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_140/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_150/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_160/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_170/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_180/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_190/" ,
-		"c:/photo/result_data_from_demo/2018_01_13_EP/save_data/0.5_200/" ,
-	};
-
-	char Save_file_AP[20][1024] = { 
-		"IoUvs_AP/IoUvs_AP3.txt" ,
-		"IoUvs_AP/IoUvs_AP_20.txt" , 
-		"IoUvs_AP/IoUvs_AP_30.txt" , 
-		"IoUvs_AP/IoUvs_AP_40.txt" , 
-		"IoUvs_AP/IoUvs_AP_50.txt" , 
-		"IoUvs_AP/IoUvs_AP_60.txt" , 
-		"IoUvs_AP/IoUvs_AP_70.txt" , 
-		"IoUvs_AP/IoUvs_AP_80.txt" , 
-		"IoUvs_AP/IoUvs_AP_90.txt" , 
-		"IoUvs_AP/IoUvs_AP_100.txt" , 
-		"IoUvs_AP/IoUvs_AP_110.txt" , 
-		"IoUvs_AP/IoUvs_AP_120.txt" , 
-		"IoUvs_AP/IoUvs_AP_130.txt" , 
-		"IoUvs_AP/IoUvs_AP_140.txt" , 
-		"IoUvs_AP/IoUvs_AP_150.txt" , 
-		"IoUvs_AP/IoUvs_AP_160.txt" , 
-		"IoUvs_AP/IoUvs_AP_170.txt" , 
-		"IoUvs_AP/IoUvs_AP_180.txt" , 
-		"IoUvs_AP/IoUvs_AP_190.txt" , 
-		"IoUvs_AP/IoUvs_AP_200.txt" , 
-	};
-
-	char Save_file_EP[20][1024] = {
-		"IoUvs_EP/IoUvs_EP3.txt" ,
-		"IoUvs_EP/IoUvs_EP_20.txt" ,
-		"IoUvs_EP/IoUvs_EP_30.txt" ,
-		"IoUvs_EP/IoUvs_EP_40.txt" ,
-		"IoUvs_EP/IoUvs_EP_50.txt" ,
-		"IoUvs_EP/IoUvs_EP_60.txt" ,
-		"IoUvs_EP/IoUvs_EP_70.txt" ,
-		"IoUvs_EP/IoUvs_EP_80.txt" ,
-		"IoUvs_EP/IoUvs_EP_90.txt" ,
-		"IoUvs_EP/IoUvs_EP_100.txt" ,
-		"IoUvs_EP/IoUvs_EP_110.txt" ,
-		"IoUvs_EP/IoUvs_EP_120.txt" ,
-		"IoUvs_EP/IoUvs_EP_130.txt" ,
-		"IoUvs_EP/IoUvs_EP_140.txt" ,
-		"IoUvs_EP/IoUvs_EP_150.txt" ,
-		"IoUvs_EP/IoUvs_EP_160.txt" ,
-		"IoUvs_EP/IoUvs_EP_170.txt" ,
-		"IoUvs_EP/IoUvs_EP_180.txt" ,
-		"IoUvs_EP/IoUvs_EP_190.txt" ,
-		"IoUvs_EP/IoUvs_EP_200.txt" ,
-	};
-
-	int i = 0;
-//	for (int i = 0; i < 20; i++) {
-		float iou=0.0;
-		for (int k = 0; k < 200; k++) {
-			cout << "EP, ";
-			Result_ROC(0.921, iou, Result_file_EP[i], Save_file_EP[i]);
-			cout << "AP";
-			Result_ROC_2(0.916, iou, Result_file_AP[i], Save_file_AP[i], 0);
-			iou += 0.005;
+	char Result_File_Path[1024] = "c:/result_data/result_text_openpose/";
+	/*
+	//テキストファイルのリスト読み込み
+	char List_n[1024];
+	FILE *List;
+	if (fopen_s(&List, "c:/test_text/text_list_all_person.txt", "r") != 0) {
+		cout << "not found List file" << endl;
+		return 0;
+	}
+	while (fgets(List_n, 256, List) != NULL) {
+		string List_str = List_n;
+		char List_name[1024];
+		for (int i = 0; i < List_str.length() - 1; i++) {
+			List_name[i] = List_n[i];
+			List_name[i + 1] = '\0';
 		}
 
-		cout << endl;
-//	}
+		char Result_name[1024];
+		for (int i = 0;; i++) {
+			Result_name[i] = Result_File_Path[i];
+			if (Result_File_Path[i] == '\0')break;
+		}
+
+		strcat_s(Result_name, List_name);
+		//Resultファイル読み込み
+		char Result_n[5][1024];
+		FILE *Result;
+		if (fopen_s(&Result, Result_name, "r") != 0) {
+			cout << "not found Result file" << endl;
+			return 0;
+		}
+		int num_R = 0;
+		Place place_Result[20];
+		while (fgets(Result_n[0], 256, Result) != NULL) {	//すべて読み込み，変数に格納
+			fgets(Result_n[1], 256, Result);
+			fgets(Result_n[2], 256, Result);
+			fgets(Result_n[3], 256, Result);
+			fgets(Result_n[4], 256, Result);
+
+			place_Result[num_R].yudo = atof(Result_n[0]);
+			place_Result[num_R].x = atoi(Result_n[1]);
+			place_Result[num_R].y = atoi(Result_n[2]);
+			place_Result[num_R].width = atoi(Result_n[3]);
+			place_Result[num_R].height = atoi(Result_n[4]);
+			place_Result[num_R].width -= place_Result[num_R].x;
+			place_Result[num_R].height -= place_Result[num_R].y;
+			num_R++;
+		}
+		fclose(Result);
+
+		//文字列入れ替えてテスト画像読み込み
+		char Img_Name[1024] = "c:/test_images/";
+		for (int i = 0; List_name[i] != '\0'; i++) {
+			if (List_name[i] == '.') {
+				List_name[i + 1] = 'b';
+				List_name[i + 2] = 'm';
+				List_name[i + 3] = 'p';
+			}
+		}
+		strcat_s(Img_Name, List_name);
+		cout << Img_Name << endl;
+		cv::Mat Test_img = cv::imread(Img_Name);
+		for (int i = 0; i < num_R; i++) {
+			draw_rectangle(Test_img, place_Result[i].x, place_Result[i].y, place_Result[i].width, place_Result[i].height, 255, 0, 0);
+		}
+		cv::imshow("test", Test_img);
+		cvWaitKey(0);
+	}
+	fclose(List);
+
+	*/
+	
+	IoU_Result_2(0.8, Result_File_Path, 0);
 
 	return 0;
 }
-*/
